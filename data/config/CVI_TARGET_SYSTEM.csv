@@ -1,0 +1,2 @@
+SYSTEM_ID,CLIENT,BASE_URL,ENABLED,NOTE
+S4D,100,,,Set BASE_URL to the endpoint that accepts the payload and put X in ENABLED to allow a direct push. Credentials are never stored here - the push reads CVI_SAP_USER and CVI_SAP_PASSWORD from the environment. With ENABLED empty the tool only writes the package under out\send.

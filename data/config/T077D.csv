@@ -1,0 +1,13 @@
+KTOKD,TXT30,XCPDK,NUMKR,PARTNER_TYPE_HINT
+0001,Sold-to party,,01,ORG
+0002,Goods recipient,,01,ORG
+0003,Payer,,01,ORG
+0004,Bill-to party,,01,ORG
+0005,Prospect,,01,ORG
+CPD,One-time customer,X,07,ORG
+ZDOM,Domestic customer,,Z1,ORG
+ZEXP,Export customer,,Z1,ORG
+ZEMP,Employee customer,,Z2,PERSON
+ZINT,Intercompany customer,,Z3,ORG
+ZSRV,Service customer,,Z4,ORG
+ZOTC,One-time service customer,X,07,ORG

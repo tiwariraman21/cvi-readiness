@@ -1,0 +1,11 @@
+# Generated analysis output - reproduce with:  .\Run-Cvi.ps1 -Console -Export
+out/
+
+# Server log
+*.log
+
+# Windows and editor noise
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/

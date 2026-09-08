@@ -1,0 +1,71 @@
+# Cvi.Analyze.ps1 - runs both layers and assembles the report object the UI and the CLI share.
+
+function Invoke-CviAnalysis {
+    param([string]$Root, [switch]$ForceLocalJudge)
+
+    $started = Get-Date
+    $data = Get-CviDataset -Root $Root
+    $ruleChecks = Invoke-CviRules -Data $data
+    $judgment = Invoke-CviJudgment -Data $data -ForceLocal:$ForceLocalJudge
+
+    $checks = @($ruleChecks) + @($judgment.Checks)
+    $score = Get-CviScore -Checks $checks
+    $numberPlan = Get-CviNumberPlan -Data $data
+
+    $sev = @{ 'BLOCKER' = 0; 'HIGH' = 0; 'MEDIUM' = 0; 'LOW' = 0 }
+    $passed = 0; $na = 0; $affected = 0
+    foreach ($c in $checks) {
+        if ($c.Status -eq 'PASS') { $passed++; continue }
+        if ($c.Status -eq 'NA')   { $na++; continue }
+        $sev[$c.Severity] = $sev[$c.Severity] + 1
+        $affected += $c.Count
+    }
+
+    $gate = 'READY'
+    if ($sev['BLOCKER'] -gt 0) { $gate = 'NOT READY' }
+    elseif (($sev['HIGH'] + $sev['MEDIUM'] + $sev['LOW']) -gt 0) { $gate = 'READY WITH ACTIONS' }
+
+    $set = $data.Settings
+    $customers = @($data.Records | Where-Object { $_.Object -eq 'CUSTOMER' }).Count
+    $vendors   = @($data.Records | Where-Object { $_.Object -eq 'VENDOR' }).Count
+
+    $order = @{ 'BLOCKER' = 0; 'HIGH' = 1; 'MEDIUM' = 2; 'LOW' = 3 }
+    $sorted = @($checks | Sort-Object `
+        @{ Expression = { if ($_.Status -eq 'FAIL') { 0 } elseif ($_.Status -eq 'NA') { 1 } else { 2 } } }, `
+        @{ Expression = { $order[$_.Severity] } }, `
+        @{ Expression = { $_.Id } })
+
+    [pscustomobject]@{
+        GeneratedAt   = $started.ToString('yyyy-MM-dd HH:mm:ss')
+        DurationMs    = [int]((Get-Date) - $started).TotalMilliseconds
+        SystemId      = $set['SYSTEM_ID']
+        Client        = $set['CLIENT']
+        SourceRelease = $set['SOURCE_RELEASE']
+        TargetRelease = $set['TARGET_RELEASE']
+        Strategy      = $set['NUMBER_STRATEGY']
+        Score         = $score
+        Gate          = $gate
+        AiMode        = $judgment.Mode
+        AiDetail      = $judgment.ModeDetail
+        Counts        = [pscustomobject]@{
+            Blocker       = $sev['BLOCKER']
+            High          = $sev['HIGH']
+            Medium        = $sev['MEDIUM']
+            Low           = $sev['LOW']
+            Failed        = $sev['BLOCKER'] + $sev['HIGH'] + $sev['MEDIUM'] + $sev['LOW']
+            Passed        = $passed
+            NotApplicable = $na
+            Checks        = $checks.Count
+            Affected      = $affected
+            Customers     = $customers
+            Vendors       = $vendors
+            Contacts      = $data.Contacts.Count
+            Addresses     = $data.Addresses.Count
+            AccountGroups = $data.CustAccountGrp.Count + $data.VendAccountGrp.Count
+            Groupings     = $data.BpGrouping.Count
+            Candidates    = $judgment.CandidateCount
+        }
+        Checks        = $sorted
+        NumberPlan    = $numberPlan
+    }
+}

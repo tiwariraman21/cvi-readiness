@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CVI Readiness Analyzer</title>
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-left">
+    <div class="mark">CVI</div>
+    <div>
+      <h1>Customer/Vendor Integration readiness</h1>
+      <p class="sub" id="systemLine">loading…</p>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <nav class="nav">
+      <a href="/" class="current">Findings</a>
+      <a href="/numbers">Number ranges</a>
+    </nav>
+    <span class="badge" id="aiBadge" title="">judgment layer</span>
+    <button class="btn" id="rerunBtn">Re-run analysis</button>
+    <button class="btn btn-primary" id="allPacksBtn">Generate all fix packs</button>
+  </div>
+</header>
+
+<main>
+
+  <section class="hero">
+    <div class="score-card">
+      <svg class="ring" viewBox="0 0 120 120" role="img" aria-labelledby="ringLabel">
+        <title id="ringLabel">Readiness score</title>
+        <circle class="ring-track" cx="60" cy="60" r="52"></circle>
+        <circle class="ring-value" id="ringValue" cx="60" cy="60" r="52"></circle>
+      </svg>
+      <div class="score-text">
+        <div class="score-number" id="scoreNumber">–</div>
+        <div class="score-of">weighted checks passed</div>
+        <div class="gate" id="gate"><span class="gate-icon" id="gateIcon"></span><span id="gateText">–</span></div>
+      </div>
+    </div>
+
+    <div class="tiles">
+      <div class="tile" data-sev="BLOCKER">
+        <div class="tile-value" id="tBlocker">–</div>
+        <div class="tile-label"><span class="dot dot-critical"></span>Blockers</div>
+        <div class="tile-note">stop the conversion run</div>
+      </div>
+      <div class="tile" data-sev="HIGH">
+        <div class="tile-value" id="tHigh">–</div>
+        <div class="tile-label"><span class="dot dot-serious"></span>High</div>
+        <div class="tile-note">fail records or lose data</div>
+      </div>
+      <div class="tile" data-sev="MEDIUM">
+        <div class="tile-value" id="tMedium">–</div>
+        <div class="tile-label"><span class="dot dot-warning"></span>Medium &amp; low</div>
+        <div class="tile-note">post-processing backlog</div>
+      </div>
+      <div class="tile">
+        <div class="tile-value" id="tAffected">–</div>
+        <div class="tile-label"><span class="dot dot-neutral"></span>Objects to fix</div>
+        <div class="tile-note" id="tScope">–</div>
+      </div>
+      <div class="tile">
+        <div class="tile-value" id="tPassed">–</div>
+        <div class="tile-label"><span class="dot dot-good"></span>Checks passed</div>
+        <div class="tile-note" id="tChecks">–</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="distribution">
+    <div class="dist-head">
+      <h2>Where the work sits</h2>
+      <p class="muted" id="distNote">–</p>
+    </div>
+    <div class="dist-bar" id="distBar"></div>
+    <div class="legend" id="distLegend"></div>
+  </section>
+
+  <section class="controls">
+    <div class="chips" id="catChips"></div>
+    <label class="toggle"><input type="checkbox" id="showPassed"> show checks that passed</label>
+  </section>
+
+  <section id="findings" class="findings"></section>
+
+  <section class="output">
+    <div class="dist-head">
+      <h2>Generated files</h2>
+      <p class="muted" id="outNote">Fix packs are written next to the tool, in <code>.\out</code>.</p>
+    </div>
+    <div id="fileList" class="filelist"><p class="muted">Nothing generated yet.</p></div>
+  </section>
+
+  <footer class="foot">
+    <p>Rule layer: deterministic checks over the extracted configuration and master data.
+       Judgment layer: candidates proposed deterministically, then judged — by Claude when
+       <code>ANTHROPIC_API_KEY</code> is set, otherwise by the bundled local judge.</p>
+    <p>The SAP Note catalog ships as a seed and is marked unverified: confirm every note in SAP ONE Support before acting on it.</p>
+  </footer>
+
+</main>
+
+<div class="toast" id="toast" hidden></div>
+
+<script src="/app.js"></script>
+<script src="/chat.js"></script>
+</body>
+</html>

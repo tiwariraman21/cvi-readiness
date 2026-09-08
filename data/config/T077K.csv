@@ -1,0 +1,10 @@
+KTOKK,TXT30,XCPDK,NUMKR,PARTNER_TYPE_HINT
+0001,Vendor,,01,ORG
+0002,Goods supplier,,01,ORG
+0100,Employee vendor,,01,PERSON
+CPDL,One-time vendor,X,07,ORG
+YDOM,Domestic vendor,,Y1,ORG
+YIMP,Import vendor,,Y2,ORG
+YEMP,Employee vendor,,Y3,PERSON
+YSRV,Service provider,,Y4,ORG
+YINT,Intercompany vendor,,Y5,ORG

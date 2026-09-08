@@ -1,0 +1,10 @@
+GROUPING,TEXT,NUMBER_RANGE,EXTERNAL,INT_STD,EXT_STD,ONE_TIME
+BP01,Internal BP (organization),01,,X,,
+BP02,Internal BP (person),02,,,,
+BPEX,External BP,EX,X,,X,
+ZCUS,Customer business partner,Z1,X,,,
+ZVEN,Vendor business partner,Y1,X,,,
+ZIMP,Import vendor business partner,Y2,X,,,
+ZEMP,Employee business partner,Z2,X,,,
+ZINT,Intercompany business partner,Z3,X,,,
+ZONE,One-time business partner,07,X,,,X

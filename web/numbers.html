@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Number ranges · CVI Readiness Analyzer</title>
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-left">
+    <div class="mark">CVI</div>
+    <div>
+      <h1>Number ranges and proposed BP design</h1>
+      <p class="sub" id="systemLine">loading…</p>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <nav class="nav">
+      <a href="/">Findings</a>
+      <a href="/numbers" class="current">Number ranges</a>
+    </nav>
+    <button class="btn btn-primary" id="exportBtn">Export proposal</button>
+  </div>
+</header>
+
+<main>
+
+  <section class="tiles tiles-6">
+    <div class="tile">
+      <div class="tile-value" id="tSource">–</div>
+      <div class="tile-label"><span class="dot dot-neutral"></span>ECC intervals</div>
+      <div class="tile-note" id="tSourceNote">–</div>
+    </div>
+    <div class="tile">
+      <div class="tile-value" id="tBp">–</div>
+      <div class="tile-label"><span class="dot dot-neutral"></span>BP intervals</div>
+      <div class="tile-note" id="tBpNote">–</div>
+    </div>
+    <div class="tile">
+      <div class="tile-value" id="tChanges">–</div>
+      <div class="tile-label"><span class="dot dot-warning"></span>Intervals to change</div>
+      <div class="tile-note" id="tChangesNote">–</div>
+    </div>
+    <div class="tile">
+      <div class="tile-value" id="tCollisions">–</div>
+      <div class="tile-label"><span class="dot dot-critical"></span>Number collisions</div>
+      <div class="tile-note">claimed by a customer and a vendor</div>
+    </div>
+    <div class="tile">
+      <div class="tile-value" id="tOverlaps">–</div>
+      <div class="tile-label"><span class="dot dot-serious"></span>Interval overlaps</div>
+      <div class="tile-note">two groupings accepting one number</div>
+    </div>
+    <div class="tile">
+      <div class="tile-value" id="tCovered">–</div>
+      <div class="tile-label"><span class="dot dot-good"></span>Records routed</div>
+      <div class="tile-note" id="tCoveredNote">–</div>
+    </div>
+  </section>
+
+  <section class="distribution">
+    <div class="dist-head">
+      <div>
+        <h2>Proposed target design</h2>
+        <p class="muted" id="planNote">–</p>
+      </div>
+      <div class="edit-actions">
+        <span class="pack-result" id="editState"></span>
+        <button class="btn" id="resetBtn">Reset to proposed</button>
+        <button class="btn btn-primary" id="saveBtn" disabled>Save changes</button>
+      </div>
+    </div>
+    <div class="map" id="map"></div>
+    <div class="legend">
+      <span class="legend-item"><span class="swatch swatch-track"></span>Proposed interval</span>
+      <span class="legend-item"><span class="swatch swatch-used"></span>Numbers actually used</span>
+    </div>
+    <p class="muted" style="margin-top:14px">The range key, interval and external flag are editable. Edits are kept in
+      <code>data\config\CVI_BP_RANGE_OVERRIDES.csv</code>, re-applied on every run, and re-checked like a proposed
+      interval — one that no longer covers its records is flagged, not trusted.</p>
+    <div class="table-wrap" style="margin-top:10px">
+      <table id="proposalTable"></table>
+    </div>
+  </section>
+
+  <section class="distribution" id="conflictSection" hidden>
+    <div class="dist-head"><h2>Conflicts to settle before the intervals are transported</h2></div>
+    <div id="conflicts"></div>
+  </section>
+
+  <section class="distribution">
+    <div class="dist-head">
+      <h2>ECC source intervals</h2>
+      <p class="muted">DEBITOR and KREDITOR checked against the numbers the master data actually occupies.</p>
+    </div>
+    <div class="table-wrap"><table id="sourceTable"></table></div>
+  </section>
+
+  <section class="distribution">
+    <div class="dist-head">
+      <h2>BP intervals today</h2>
+      <p class="muted">BU_PARTNER intervals as they stand, against what the current mapping would send them.</p>
+    </div>
+    <div class="table-wrap"><table id="bpTable"></table></div>
+  </section>
+
+  <section class="distribution">
+    <div class="dist-head">
+      <div>
+        <h2>Send to the target system</h2>
+        <p class="muted" id="sendNote">–</p>
+      </div>
+      <div class="edit-actions">
+        <button class="btn" id="confirmAllBtn">Confirm all valid</button>
+        <button class="btn btn-primary" id="sendBtn">Build package</button>
+        <button class="btn" id="pushBtn" hidden>Push to system</button>
+      </div>
+    </div>
+    <div id="sendResult" class="pack-result">Tick <strong>Confirm</strong> on the intervals you have signed off, then build the package. It contains the
+      SNRO intervals, the grouping assignment, the account group mapping and a runbook — only for confirmed rows.</div>
+  </section>
+
+  <section class="output">
+    <div class="dist-head"><h2>How to apply this</h2></div>
+    <ol class="steps">
+      <li><code>SNRO</code>, object <code>BU_PARTNER</code> — create or change each interval in the table above, external where the Ext column is marked.</li>
+      <li><code>SPRO</code> &gt; Cross-Application Components &gt; SAP Business Partner &gt; Business Partner &gt; Basic Settings &gt; Number Ranges and Groupings &gt; <em>Define Groupings and Assign Number Ranges</em> — assign each interval to its grouping.</li>
+      <li><code>SPRO</code> &gt; … &gt; Customer/Vendor Integration &gt; <em>Define Number Assignment for Direction Customer/Vendor to BP</em> — route each account group into its grouping.</li>
+      <li>Re-run the analysis. CFG-05, CFG-06 and CFG-08 are the checks that confirm the design holds.</li>
+    </ol>
+    <div id="exportResult" class="pack-result" style="margin-top:12px"></div>
+  </section>
+
+  <footer class="foot">
+    <p>Intervals are proposed from the number band each grouping actually occupies, rounded outward to a whole 100,000 block with headroom left above the highest used number.</p>
+  </footer>
+
+</main>
+
+<div class="toast" id="toast" hidden></div>
+
+<script src="/numbers.js"></script>
+<script src="/chat.js"></script>
+</body>
+</html>
