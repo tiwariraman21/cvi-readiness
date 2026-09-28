@@ -14,6 +14,11 @@
   --critical: #d03b3b;
   --accent: #2a78d6;
   --accent-soft: #cde2fb;
+  /* Deliberately not --good: a check somebody recorded as done must never read as one that
+     passed on the data. Violet sits outside the severity ramp, so it cannot be mistaken
+     for "less severe" either. */
+  --recorded: #7b5ed6;
+  --recorded-soft: #ece5fb;
   --shadow: 0 1px 2px rgba(11, 11, 11, .06), 0 8px 24px rgba(11, 11, 11, .05);
 }
 
@@ -30,6 +35,8 @@
     --border: rgba(255, 255, 255, 0.10);
     --accent: #3987e5;
     --accent-soft: #184f95;
+    --recorded: #a58bec;
+    --recorded-soft: #2e2448;
     --shadow: 0 1px 2px rgba(0, 0, 0, .5), 0 8px 24px rgba(0, 0, 0, .35);
   }
 }
@@ -46,6 +53,8 @@
   --border: rgba(255, 255, 255, 0.10);
   --accent: #3987e5;
   --accent-soft: #184f95;
+  --recorded: #a58bec;
+  --recorded-soft: #2e2448;
 }
 
 * { box-sizing: border-box; }
@@ -79,8 +88,12 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
   background: var(--surface-1);
   border-bottom: 1px solid var(--border);
 }
-.topbar-left { display: flex; align-items: center; gap: 14px; }
-.topbar-right { display: flex; align-items: center; gap: 10px; }
+.topbar-left { display: flex; align-items: center; gap: 14px; min-width: 0; }
+/* Buttons keep their labels on one line and the row wraps instead: a four-button bar was
+   breaking "Export master data to Excel" across three lines and pushing the header over
+   the hero below it. */
+.topbar-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+.topbar-right .btn { white-space: nowrap; }
 .mark {
   width: 38px; height: 38px; flex: none;
   display: grid; place-items: center;
@@ -105,6 +118,7 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
 .btn:disabled { opacity: .55; cursor: progress; }
 .btn-primary { background: var(--accent); border-color: transparent; color: #fff; }
 .btn-primary:hover { filter: brightness(1.06); }
+.btn-small { padding: 4px 9px; font-size: 12px; white-space: nowrap; }
 
 main { max-width: 1180px; margin: 0 auto; padding: 24px 28px 60px; display: grid; gap: 20px; }
 
@@ -221,6 +235,30 @@ td.detail { color: var(--text-secondary); min-width: 280px; }
 .conf-bar { width: 46px; height: 5px; border-radius: 3px; background: var(--grid); overflow: hidden; }
 .conf-bar i { display: block; height: 100%; background: var(--accent); }
 .verdict { font-size: 10.5px; font-weight: 650; letter-spacing: .03em; }
+
+/* ---------------------------------------------------------------- recorded as done */
+
+.recorded-banner {
+  border: 1px solid var(--recorded); background: var(--recorded-soft);
+  border-left-width: 4px; border-radius: 10px;
+  padding: 11px 15px; font-size: 13px; line-height: 1.5; color: var(--text-primary);
+}
+.dot-recorded { background: var(--recorded); }
+.tag-recorded { border-color: var(--recorded); color: var(--recorded); }
+.card.recorded .card-id { color: var(--recorded); }
+.recorded-note {
+  margin: 12px 0 0; padding: 10px 13px; border-radius: 8px;
+  background: var(--recorded-soft); border: 1px solid var(--recorded);
+  font-size: 12.5px; line-height: 1.55;
+}
+
+.choice-cell { white-space: nowrap; }
+.choice-cell .in {
+  padding: 4px 7px; border-radius: 6px; font: inherit; font-size: 12px; max-width: 230px;
+  border: 1px solid var(--border); background: var(--plane); color: var(--text-primary);
+}
+.choice-cell .in:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+.choice-cell .choice-saved { border-color: var(--good); }
 
 .card-actions { display: flex; align-items: center; gap: 12px; margin-top: 14px; flex-wrap: wrap; }
 .pack-result { font-size: 12px; color: var(--text-secondary); }

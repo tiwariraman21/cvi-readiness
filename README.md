@@ -25,9 +25,57 @@ In the web report each finding expands to show why it matters, what to do, the I
 and the affected objects. **Generate fix pack** writes that finding's worklist to `.\out`;
 **Generate all fix packs** writes every worklist plus a task list and the full JSON report.
 
+## The master data workbook
+
+**Export master data to Excel** writes `out\CVI_MASTER_DATA.xlsx` — one sheet per extracted
+table (`KNA1`, `LFA1`, `ADRC`, `KNVK`, `BUT000`) with the original columns untouched, and four
+added at the end: `CHECKS`, `SEVERITY`, `FINDING` and `CHANGE_TO`. A record that failed a check
+carries its findings on its own row and is shaded, so the person correcting the data reads the
+problem next to the field rather than joining two lists by hand. A record that failed several
+checks carries all of them, and `SEVERITY` shows the worst so a sort brings the blockers up.
+The `Summary` sheet carries the system, the releases, the score and the gate, how many records
+each sheet holds and how many of them are flagged, and the status of every check — including
+anything recorded as done rather than verified.
+
+The workbook is written directly as an OOXML package with `System.IO.Compression`, so the export
+needs no Excel, no module and no add-in: it works on a machine where Excel was never installed.
+Every cell is written as an inline string rather than a number, because SAP keys are zero-padded
+and a numeric cell would turn `0000100004` into `100004` — a key that matches nothing.
+
+## Deciding, and recording that you have
+
+Every affected object carries a **Change to** cell — what that object should become. Where the
+extract holds the set of valid values the cell is a dropdown built from it, so it can only offer
+something the target system would accept: BP groupings come from `TB001`, forms of address from
+`TSAD3`, and a one-time account group is offered only groupings flagged one-time. Where the
+question is a decision rather than a value — a customer and a vendor that collide on a number,
+a record that is probably a duplicate — the dropdown carries the decisions instead. Where there
+is no table of valid values at all (a region, a postal code, a tax number) the cell takes a typed
+value, because offering a made-up list would be worse than asking. Choices are stored in
+`data\config\CVI_DECISIONS.csv`, re-applied on every run, and written into the worklist as a
+`CHANGE_TO` column so whoever does the correction works from the decision, not just the problem.
+
+**Generate fix pack** also records that somebody has taken the check on. The card moves to
+**on record**, and the check reads `DONE` — which is deliberately not `PASS`:
+
+| | means |
+|---|---|
+| `PASS` | the extract itself is clean |
+| `DONE` | a person said they would handle it; the extract still fails |
+
+A recorded check earns its weight in the score and stops blocking the gate, so the report has to
+say how much of the number rests on somebody's word: a banner at the top of the page gives the
+count, the gate reads `READY WITH ACTIONS (ON RECORD)`, the card is drawn in its own colour that
+is never the green of a passed check, and the console report lists every recorded check with who
+recorded it and when. **Reopen check** drops the record and the check goes straight back to
+failing. Nothing here reaches an SAP system, and because the record is only an overlay, a fresh
+extract that is still wrong fails the check again — a recorded decision can never hide a
+regression. **Generate all fix packs** deliberately records nothing: marking twenty checks done
+on one click is not something anybody means to do.
+
 The **Number ranges** page (`http://localhost:8787/numbers`) is the second half: every ECC
 interval checked against the numbers the master data actually occupies, the BP intervals as
-they stand, and a proposed target design with one row per interval to create, widen or move.
+they stand, and a proposed target design with one row per interval to create, edit or move.
 **Export proposal** writes it to `.\out` as a CSV to work from and a page to hand over.
 
 ## The assistant
@@ -138,6 +186,9 @@ same column headers. The tool reads them and nothing else; it never connects to 
 | `data\config\NRIV.csv` | number ranges for DEBITOR, KREDITOR, BU_PARTNER |
 | `data\config\T005.csv`, `TSAD3.csv` | country rules and BP titles |
 | `data\config\CVI_SETTINGS.csv` | CVI switches and the project's number strategy |
+| `data\config\CVI_NOTE_STATUS.csv` | note confirmations ticked in the report (not an extract) |
+| `data\config\CVI_DECISIONS.csv` | per-object choices made in the report (not an extract) |
+| `data\config\CVI_CHECK_STATUS.csv` | checks recorded as done in the report (not an extract) |
 | `data\master\KNA1.csv`, `LFA1.csv`, `ADRC.csv`, `KNVK.csv`, `BUT000.csv` | master data |
 | `data\notes\sap_notes.csv` | the note catalog |
 
@@ -152,6 +203,23 @@ tells you which notes are relevant to the situation it found — it does not con
 says. Check each one in SAP ONE Support for the target release before acting on it, and set
 `VERIFIED=Y` once the row has been confirmed against the Launchpad.
 
+Each listed note carries a **Mark implemented** tick. It records the confirmation in
+`data\config\CVI_NOTE_STATUS.csv` — note number, who confirmed it, when — and the note drops off
+the check on the spot. It **does not implement the note**: that happens in `SNOTE`, and the tool
+never reaches an SAP system. The catalog under `data\notes` is left as extracted, so a
+confirmation someone made here can always be told apart from a status that came with the seed,
+and **Reset confirmations** on the same card puts them all back on the list.
+
+A note is listed when its `APPLIES_WHEN` trigger is true in this system **and** the target
+release falls inside its `RELEASE_FROM`/`RELEASE_TO` window. Both are S/4HANA release numbers
+(`1511`, `1709`, `2023`, `2025`) and either may be left empty for an open end; the feature pack
+level in `TARGET_RELEASE` is ignored, because the catalog works at release granularity. Notes
+excluded by the window are named in the check so they are visibly filtered rather than silently
+dropped. The windows are seed values like the rest of the row — widen one if the Launchpad says
+the note still applies to your target release. If no release can be read from `TARGET_RELEASE`
+the window is not applied at all and every matching note is listed, so a malformed setting can
+never hide a note.
+
 ## Layout
 
 ```
@@ -159,9 +227,11 @@ Run-Cvi.ps1            entry point - console mode and server mode
 src\Cvi.Data.ps1       loads the extracts into one normalised dataset
 src\Cvi.Rules.ps1      deterministic checks and the score
 src\Cvi.AiJudge.ps1    candidate generation, Claude judge, local judge
+src\Cvi.Decisions.ps1  the choices offered per object, and the record that a check was taken on
 src\Cvi.Analyze.ps1    runs both layers, assembles the report
 src\Cvi.Numbers.ps1    number range analysis and the target proposal
 src\Cvi.Actions.ps1    worklists, task list, JSON export
+src\Cvi.Excel.ps1      the xlsx writer and the master data workbook
 src\Cvi.Chat.ps1       the assistant - Claude answerer and local answerer
 src\Cvi.Server.ps1     loopback HTTP server (TcpListener - no URL ACL, no admin shell)
 web\                   the report UI

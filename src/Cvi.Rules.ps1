@@ -51,6 +51,9 @@ function New-CviCheck {
         ActionKind   = $ActionKind
         Confidence   = $null
         Rationale    = $null
+        # Filled in by the decision overlay when somebody records the check as taken on.
+        RecordedBy   = $null
+        RecordedAt   = $null
     }
 }
 
@@ -75,7 +78,92 @@ function New-CviEvidence {
         Value    = $Value
         Detail   = $Detail
         Proposal = $Proposal
+        # What this object could become, and what somebody chose. Both are filled in by the
+        # decision overlay after the rules have run.
+        Options  = @()
+        Choice   = ''
     }
+}
+
+function Save-CviNoteStatus {
+    # Records against data\config\CVI_NOTE_STATUS.csv that somebody has confirmed a note is
+    # implemented. Nothing here reaches SNOTE or any SAP system: implementing a note is done
+    # in the system and this only stops the report asking for it again. The catalog under
+    # data\notes stays as seeded, so a confirmation can always be told apart from an
+    # extracted status and can always be reset.
+    param([string]$Root, [object[]]$Notes)
+
+    $path = Join-Path $Root 'data\config\CVI_NOTE_STATUS.csv'
+    $existing = @{}
+    if (Test-Path -LiteralPath $path) {
+        foreach ($row in @(Import-Csv -LiteralPath $path)) {
+            $id = Get-CviText $row.NOTE
+            if ($id -ne '') { $existing[$id] = $row }
+        }
+    }
+
+    $stamp = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')
+    foreach ($n in $Notes) {
+        $id = (Get-CviText $n.note) -replace '[^0-9]', ''
+        if ($id -eq '') { throw 'A note number is required.' }
+        $status = (Get-CviText $n.status).ToUpperInvariant()
+        if ($status -eq '') { $status = 'IMPLEMENTED' }
+        if ($status -ne 'IMPLEMENTED' -and $status -ne 'NOT_IMPLEMENTED') {
+            throw "Unknown status '$status' for note $id - use IMPLEMENTED or NOT_IMPLEMENTED."
+        }
+        # A note being put back on the list is a removal, not a row saying 'not implemented':
+        # the catalog's own status then applies again.
+        if ($status -eq 'NOT_IMPLEMENTED') {
+            $null = $existing.Remove($id)
+            continue
+        }
+        $by = Get-CviText $n.by
+        if ($by -eq '') { $by = Get-CviText $env:USERNAME }
+        if ($by -eq '') { $by = 'unknown' }
+        $existing[$id] = [pscustomobject]@{
+            NOTE         = $id
+            STATUS       = $status
+            CONFIRMED_BY = $by
+            CONFIRMED_AT = $stamp
+        }
+    }
+
+    $rows = @($existing.Values | Sort-Object NOTE)
+    if ($rows.Count -gt 0) {
+        $rows | Export-Csv -LiteralPath $path -NoTypeInformation -Encoding UTF8
+    } else {
+        'NOTE,STATUS,CONFIRMED_BY,CONFIRMED_AT' | Out-File -LiteralPath $path -Encoding utf8
+    }
+    return $rows.Count
+}
+
+function Clear-CviNoteStatus {
+    param([string]$Root)
+    $path = Join-Path $Root 'data\config\CVI_NOTE_STATUS.csv'
+    'NOTE,STATUS,CONFIRMED_BY,CONFIRMED_AT' | Out-File -LiteralPath $path -Encoding utf8
+    return 0
+}
+
+function Get-CviReleaseCode {
+    # Turns a release string into one comparable number - 'S/4HANA 2025 FPS01' -> 2025,
+    # 'S/4HANA 1709' -> 1709 - so a note's release window can be compared against the
+    # target release of the conversion. The feature pack level is deliberately ignored:
+    # the catalog works at release granularity. Returns 0 when there is no S/4HANA
+    # release in the string at all ('ECC 6.0 EHP7 SP12', an empty cell), and the caller
+    # then leaves the note in scope - a note shown that did not need to be costs a
+    # Launchpad lookup, a note silently hidden costs a missed correction.
+    param([string]$Release)
+    $m = [regex]::Match((Get-CviText $Release), '\b(1[5-9]\d\d|2[0-9]\d\d)\b')
+    if (-not $m.Success) { return 0 }
+    return [int]$m.Groups[1].Value
+}
+
+function Get-CviReleaseWindowText {
+    param([int]$From, [int]$To)
+    if ($From -gt 0 -and $To -gt 0) { return "target release $From to $To" }
+    if ($From -gt 0) { return "target release $From and later" }
+    if ($To -gt 0) { return "target release up to $To" }
+    return 'every target release'
 }
 
 function Get-CviRange {
@@ -223,13 +311,13 @@ function Invoke-CviRules {
             $to   = Get-CviText $range.TO_NUMBER
             if ($to -match '[A-Z]') { continue }   # catch-all alphanumeric range
             if (-not (Test-CviInRange $r.Key $from $to)) {
-                $ev += New-CviEvidence $r.Display $r.Key 'BP number range' $r.Key "Grouping $($r.Grouping) uses BU_PARTNER range $rangeNo ($from-$to)" "Widen range $rangeNo or route account group $($r.AccountGroup) to a grouping whose range covers this number"
+                $ev += New-CviEvidence $r.Display $r.Key 'BP number range' $r.Key "Grouping $($r.Grouping) uses BU_PARTNER range $rangeNo ($from-$to)" "Edit range $rangeNo to cover this number, or add an interval that does"
             }
         }
     }
     $null = $checks.Add((New-CviCheck -Id 'CFG-06' -Title 'Legacy numbers fit the external BP number range' -Category 'Configuration' -Severity 'HIGH' `
         -Why 'A same-number conversion writes the legacy key as the BP key. If the key sits outside the grouping''s external interval the BP creation is rejected number by number.' `
-        -Fix 'Widen the interval of the BP number range, or split the account groups across groupings whose intervals cover their number bands.' `
+        -Fix 'Edit the interval of the BP number range to cover the numbers, or add an interval that does.' `
         -ImgPath 'SNRO / SPRO > ... > Define Number Ranges (object BU_PARTNER)' `
         -Evidence $ev -PassSummary 'All legacy numbers fall inside the external BP interval of their grouping.' -FailSummary '{n} record(s) fall outside the BP number range of their grouping.' `
         -ActionId 'CFG-06' -ActionLabel 'Export out-of-range list' -ActionKind 'config'))
@@ -529,19 +617,60 @@ function Invoke-CviRules {
     foreach ($c in $checks) { if ($c.Id -eq 'CFG-01' -or $c.Id -eq 'CFG-02') { $unmappedCount += $c.Count } }
     if ($unmappedCount -gt 0) { $triggers['UNMAPPED_ACCOUNT_GROUPS'] = $true }
 
+    $targetRelease = Get-CviText $set['TARGET_RELEASE']
+    $targetCode = Get-CviReleaseCode $targetRelease
+
     $ev = @()
+    $outOfWindow = @()
+    $confirmedHere = @()
     foreach ($n in $Data.SapNotes) {
         $when = Get-CviText $n.APPLIES_WHEN
         if (-not $triggers.ContainsKey($when)) { continue }
-        if ((Get-CviText $n.STATUS) -eq 'IMPLEMENTED') { continue }
+
+        # The catalog carries the status as extracted; a confirmation ticked in the report
+        # overlays it. Reading the overlay here rather than writing it back into the catalog
+        # keeps the seed and the consultant's decisions separable.
+        $noteId = Get-CviText $n.NOTE
+        $status = Get-CviText $n.STATUS
+        if ($Data.NoteStatusMap.ContainsKey($noteId)) {
+            $ovr = $Data.NoteStatusMap[$noteId]
+            $ovrStatus = Get-CviText $ovr.STATUS
+            if ($ovrStatus -ne '') {
+                $status = $ovrStatus
+                if ($ovrStatus -eq 'IMPLEMENTED') {
+                    $who = Get-CviText $ovr.CONFIRMED_BY
+                    $confirmedHere += $(if ($who -ne '') { "$noteId (by $who)" } else { $noteId })
+                }
+            }
+        }
+        if ($status -eq 'IMPLEMENTED') { continue }
+
+        $from = Get-CviReleaseCode $n.RELEASE_FROM
+        $to   = Get-CviReleaseCode $n.RELEASE_TO
+        if ($targetCode -gt 0 -and (($from -gt 0 -and $targetCode -lt $from) -or ($to -gt 0 -and $targetCode -gt $to))) {
+            $outOfWindow += (Get-CviText $n.NOTE)
+            continue
+        }
         $verified = Get-CviText $n.VERIFIED
         $suffix = ''
         if ($verified -ne 'Y') { $suffix = ' (catalog entry not yet verified against SAP ONE Support)' }
-        $ev += New-CviEvidence 'SAP Note' (Get-CviText $n.NOTE) (Get-CviText $n.CRITICALITY) (Get-CviText $n.COMPONENT) ((Get-CviText $n.TOPIC) + $suffix) "Applies because: $when"
+        $window = Get-CviReleaseWindowText $from $to
+        $ev += New-CviEvidence 'SAP Note' (Get-CviText $n.NOTE) (Get-CviText $n.CRITICALITY) (Get-CviText $n.COMPONENT) ((Get-CviText $n.TOPIC) + $suffix) "Applies because: $when; $window"
     }
+
+    $noteWhy = 'The notes below are the ones the catalog marks as relevant for the situation actually found in this system and for the target release of this conversion, rather than the full list somebody has to read through by hand.'
+    if ($targetCode -le 0) {
+        $noteWhy += " No S/4HANA release could be read from TARGET_RELEASE ('$targetRelease'), so the release window was not applied and every note matching the situation is listed."
+    } elseif ($outOfWindow.Count -gt 0) {
+        $noteWhy += " $($outOfWindow.Count) further note(s) match the situation but sit outside the $targetRelease release window and are not listed: $($outOfWindow -join ', '). The window is part of the unverified seed - widen it in the catalog if the Launchpad says the note still applies."
+    }
+    if ($confirmedHere.Count -gt 0) {
+        $noteWhy += " $($confirmedHere.Count) note(s) were marked implemented from this report and are no longer listed: $($confirmedHere -join ', '). That is a record of somebody's confirmation, not evidence from the system - the note is implemented in SNOTE, and 'Reset confirmations' puts these back on the list."
+    }
+
     $null = $checks.Add((New-CviCheck -Id 'NOTE-01' -Title 'Applicable SAP Notes are implemented' -Category 'SAP Notes' -Severity 'HIGH' `
-        -Why 'The notes below are the ones the catalog marks as relevant for the situation actually found in this system, rather than the full list somebody has to read through by hand.' `
-        -Fix 'Check each note in SAP ONE Support for the target release and implement or confirm it. The catalog ships as a seed and must be verified - it is not a substitute for the Launchpad.' `
+        -Why $noteWhy `
+        -Fix "Check each note in SAP ONE Support for $targetRelease and implement or confirm it. The catalog ships as a seed and must be verified - it is not a substitute for the Launchpad." `
         -ImgPath 'Transaction SNOTE / SAP ONE Support Launchpad' `
         -Evidence $ev -PassSummary 'No outstanding notes for the situation found in this system.' -FailSummary '{n} applicable note(s) are not recorded as implemented.' `
         -ActionId 'NOTE-01' -ActionLabel 'Export note worklist' -ActionKind 'note'))
@@ -561,6 +690,9 @@ function Get-CviScore {
         $w = 3
         if ($weights.ContainsKey($c.Severity)) { $w = $weights[$c.Severity] }
         $possible += $w
+        # Only a check that is still failing loses its weight. A check recorded as DONE earns
+        # it, which is the whole point of recording one - and why the header has to say how
+        # much of the score is on somebody's word rather than on the extract.
         if ($c.Status -eq 'FAIL') { $lost += $w }
     }
     if ($possible -le 0) { return 100 }

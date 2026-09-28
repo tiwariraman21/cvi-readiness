@@ -1,11 +1,11 @@
-NOTE,TOPIC,COMPONENT,CRITICALITY,APPLIES_WHEN,STATUS,VERIFIED
-2265093,CVI cookbook / end-to-end guidance for the customer-vendor to business partner conversion,CA-MDG-CVI,HIGH,ALWAYS,NOT_IMPLEMENTED,N
-2216176,Pre-conversion consistency checks for customer and vendor master data,CA-MDG-CVI,HIGH,ALWAYS,IMPLEMENTED,N
-2344034,Handling of one-time accounts (CPD) during the business partner conversion,CA-MDG-CVI,MEDIUM,ONE_TIME_ACCOUNTS,NOT_IMPLEMENTED,N
-1623677,Post-processing office (PPO) setup and error handling for CVI processes,CA-GTF-BP,MEDIUM,PPO_ACTIVE,NOT_IMPLEMENTED,N
-2632318,Contact person synchronisation to business partner relationships,LO-MD-BP,MEDIUM,CONTACT_PERSONS,NOT_IMPLEMENTED,N
-2287723,Number range and grouping setup when customer and vendor numbers are kept as BP numbers,CA-MDG-CVI,HIGH,SAME_NUMBER_STRATEGY,NOT_IMPLEMENTED,N
-2713963,Performance of the mass synchronisation run and the BP duplicate check,CA-MDG-CVI,MEDIUM,DUPLICATE_CHECK_ACTIVE,NOT_IMPLEMENTED,N
-2504785,Tax number category mapping from customer and vendor master to business partner,CA-GTF-BP,MEDIUM,TAX_NUMBERS,NOT_IMPLEMENTED,N
-2211312,Account groups without a business partner grouping assignment in the CVI customising,CA-MDG-CVI,HIGH,UNMAPPED_ACCOUNT_GROUPS,NOT_IMPLEMENTED,N
-2309153,Employee vendors and person-type master records in the business partner model,CA-GTF-BP,MEDIUM,EMPLOYEE_VENDORS,IMPLEMENTED,N
+NOTE,TOPIC,COMPONENT,CRITICALITY,APPLIES_WHEN,RELEASE_FROM,RELEASE_TO,STATUS,VERIFIED
+2265093,CVI cookbook / end-to-end guidance for the customer-vendor to business partner conversion,CA-MDG-CVI,HIGH,ALWAYS,1511,,NOT_IMPLEMENTED,N
+2216176,Pre-conversion consistency checks for customer and vendor master data,CA-MDG-CVI,HIGH,ALWAYS,1511,,IMPLEMENTED,N
+2344034,Handling of one-time accounts (CPD) during the business partner conversion,CA-MDG-CVI,MEDIUM,ONE_TIME_ACCOUNTS,1511,,NOT_IMPLEMENTED,N
+1623677,Post-processing office (PPO) setup and error handling for CVI processes,CA-GTF-BP,MEDIUM,PPO_ACTIVE,1511,,NOT_IMPLEMENTED,N
+2632318,Contact person synchronisation to business partner relationships,LO-MD-BP,MEDIUM,CONTACT_PERSONS,1511,,NOT_IMPLEMENTED,N
+2287723,Number range and grouping setup when customer and vendor numbers are kept as BP numbers,CA-MDG-CVI,HIGH,SAME_NUMBER_STRATEGY,1511,,NOT_IMPLEMENTED,N
+2713963,Performance of the mass synchronisation run and the BP duplicate check,CA-MDG-CVI,MEDIUM,DUPLICATE_CHECK_ACTIVE,1511,2023,NOT_IMPLEMENTED,N
+2504785,Tax number category mapping from customer and vendor master to business partner,CA-GTF-BP,MEDIUM,TAX_NUMBERS,1511,,NOT_IMPLEMENTED,N
+2211312,Account groups without a business partner grouping assignment in the CVI customising,CA-MDG-CVI,HIGH,UNMAPPED_ACCOUNT_GROUPS,1511,,NOT_IMPLEMENTED,N
+2309153,Employee vendors and person-type master records in the business partner model,CA-GTF-BP,MEDIUM,EMPLOYEE_VENDORS,1511,,IMPLEMENTED,N

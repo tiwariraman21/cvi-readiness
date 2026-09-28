@@ -9,3 +9,12 @@ Thumbs.db
 desktop.ini
 .vscode/
 .idea/
+
+# Runtime/user decision state
+data/config/CVI_CHECK_STATUS.csv
+data/config/CVI_DECISIONS.csv
+data/config/CVI_NOTE_STATUS.csv
+
+# Local secrets
+.env
+.env.*

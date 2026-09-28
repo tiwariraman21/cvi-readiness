@@ -26,8 +26,11 @@ function New-CviFixPack {
             VALUE      = $e.Value
             FINDING    = $e.Detail
             ACTION     = $e.Proposal
+            # The decision taken on the page. A worklist that carries what the object should
+            # become is something the person doing the correction can work straight from.
+            CHANGE_TO  = $e.Choice
             OWNER      = ''
-            STATUS     = 'OPEN'
+            STATUS     = $(if ((Get-CviText $e.Choice) -ne '') { 'DECIDED' } else { 'OPEN' })
         }
     }
 
@@ -35,7 +38,7 @@ function New-CviFixPack {
     if ($rows.Count -gt 0) {
         $rows | Export-Csv -LiteralPath $csvPath -NoTypeInformation -Encoding UTF8
     } else {
-        'CHECK,SEVERITY,CATEGORY,OBJECT,TABLE,KEY,FIELD,VALUE,FINDING,ACTION,OWNER,STATUS' | Out-File -LiteralPath $csvPath -Encoding utf8
+        'CHECK,SEVERITY,CATEGORY,OBJECT,TABLE,KEY,FIELD,VALUE,FINDING,ACTION,CHANGE_TO,OWNER,STATUS' | Out-File -LiteralPath $csvPath -Encoding utf8
     }
 
     $md = @()
@@ -58,7 +61,15 @@ function New-CviFixPack {
     $md += '```'
     $md += ''
     $md += "## Worklist"
+    $decided = @($rows | Where-Object { (Get-CviText $_.CHANGE_TO) -ne '' }).Count
     $md += "See ``$([IO.Path]::GetFileName($csvPath))`` - $($rows.Count) row(s), one per affected object, with OWNER and STATUS columns to track the correction."
+    $md += ''
+    $md += "$decided of $($rows.Count) row(s) carry a decision in CHANGE_TO - what that object should become. The rest are still open."
+    if ($check.RecordedBy) {
+        $md += ''
+        $md += "## Recorded"
+        $md += "$($check.Id) was marked done by $($check.RecordedBy) on $($check.RecordedAt). That is a record that somebody took it on, not evidence that the system was corrected - the check will fail again on the next extract if the data is still wrong."
+    }
     $mdPath = Join-Path $OutDir ("{0}_instructions.md" -f $check.Id)
     ($md -join [Environment]::NewLine) | Out-File -LiteralPath $mdPath -Encoding utf8
 

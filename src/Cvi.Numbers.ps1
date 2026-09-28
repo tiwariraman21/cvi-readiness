@@ -3,7 +3,7 @@
 # Three passes:
 #   1. the ECC source ranges (DEBITOR, KREDITOR) against what the master data actually uses
 #   2. the BP ranges as they stand today (BU_PARTNER) against what the mapping would send them
-#   3. a proposed target design, one row per grouping, with the interval to create or widen
+#   3. a proposed target design, one row per grouping, with the interval to create or edit
 #
 # Under a same-number strategy the legacy key becomes the BP key, so a BP interval has to
 # cover the number band of every account group routed into its grouping. That is the whole
@@ -327,8 +327,8 @@ function Get-CviNumberPlan {
                 $action = 'TIGHTEN'
                 $rationale = "Interval ends at '$($row.RawTo)' and accepts any value. Tightening it to $($iv.Inherited) turns a silent mis-route into an error at load time."
             } elseif ($null -eq $curFrom -or $null -eq $curTo -or $curFrom -gt $iv.From -or $curTo -lt $iv.To) {
-                $action = 'WIDEN'
-                $rationale = "$($row.Outside) of $($records.Count) record(s) in this grouping fall outside $($row.From)-$($row.To). The band inherited from $($iv.Inherited) runs $(Format-CviNum $iv.From)-$(Format-CviNum $iv.To)."
+                $action = 'EDIT INTERVAL'
+                $rationale = "$($row.Outside) of $($records.Count) record(s) in this grouping fall outside $($row.From)-$($row.To). Change the interval to the band inherited from $($iv.Inherited), which runs $(Format-CviNum $iv.From)-$(Format-CviNum $iv.To)."
             }
 
             if ($i -gt 0) {

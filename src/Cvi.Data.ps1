@@ -67,6 +67,32 @@ function Get-CviDataset {
         SapNotes        = Import-CviTable (Join-Path $notes 'sap_notes.csv')
     }
 
+    # Confirmations a consultant ticked in the report. The note catalog itself stays as it
+    # was seeded - this is the edit layer laid over it, the same shape as the range overrides.
+    $data.NoteStatus = Import-CviOptionalTable (Join-Path $cfg 'CVI_NOTE_STATUS.csv')
+    $data.NoteStatusMap = @{}
+    foreach ($o in $data.NoteStatus) {
+        $id = Get-CviText $o.NOTE
+        if ($id -ne '') { $data.NoteStatusMap[$id] = $o }
+    }
+
+    # Per-object choices and per-check 'done' records made in the report. Like the note
+    # confirmations these are decisions, not extracts, and they overlay the result instead
+    # of feeding the rules - so a re-extract still reports what the data actually says.
+    $data.Decisions = Import-CviOptionalTable (Join-Path $cfg 'CVI_DECISIONS.csv')
+    $data.DecisionMap = @{}
+    foreach ($d in $data.Decisions) {
+        $k = '{0}|{1}|{2}' -f (Get-CviText $d.CHECK_ID), (Get-CviText $d.OBJECT_KEY), (Get-CviText $d.FIELD)
+        $data.DecisionMap[$k] = $d
+    }
+
+    $data.CheckStatus = Import-CviOptionalTable (Join-Path $cfg 'CVI_CHECK_STATUS.csv')
+    $data.CheckStatusMap = @{}
+    foreach ($s in $data.CheckStatus) {
+        $id = Get-CviText $s.CHECK_ID
+        if ($id -ne '') { $data.CheckStatusMap[$id] = $s }
+    }
+
     $data.RangeOverrides = Import-CviOptionalTable (Join-Path $cfg 'CVI_BP_RANGE_OVERRIDES.csv')
     $data.RangeOverrideMap = @{}
     foreach ($o in $data.RangeOverrides) {

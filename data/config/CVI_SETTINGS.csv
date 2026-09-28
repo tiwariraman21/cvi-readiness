@@ -1,8 +1,8 @@
-KEY,VALUE,DESCRIPTION
+﻿KEY,VALUE,DESCRIPTION
 SYSTEM_ID,ECP,Source system ID of the extract
 CLIENT,300,Source client
 SOURCE_RELEASE,ECC 6.0 EHP7 SP12,Start release of the conversion
-TARGET_RELEASE,S/4HANA 2023 FPS02,Target release of the conversion
+TARGET_RELEASE,S/4HANA 2025 FPS01,Target release of the conversion
 SYNC_DIRECTION,CUST_VEND_TO_BP,Activated synchronisation direction in CVI (MDS_LOAD_COCKPIT / IMG)
 PPO_ACTIVE_CVI_01,X,Post-processing office active for process CVI_01 (customer to BP)
 PPO_ACTIVE_CVI_02,X,Post-processing office active for process CVI_02 (vendor to BP)

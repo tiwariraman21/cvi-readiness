@@ -56,7 +56,7 @@ async function api(path, opts) {
 
 function renderHeader(r) {
   $('systemLine').textContent =
-    `${r.SystemId}/${r.Client} · ${r.SourceRelease} → ${r.TargetRelease} · ${r.Strategy.replace('_', ' ').toLowerCase()} strategy · analysed ${r.GeneratedAt} in ${r.DurationMs} ms`;
+    `${r.Strategy.replace('_', ' ').toLowerCase()} strategy · analysed ${r.GeneratedAt} in ${r.DurationMs} ms`;
   const badge = $('aiBadge');
   badge.textContent = `judgment layer: ${r.AiMode}`;
   badge.title = r.AiDetail;
@@ -84,6 +84,23 @@ function renderScore(r) {
   $('tScope').textContent = `of ${c.Customers} customers, ${c.Vendors} vendors, ${c.Contacts} contacts`;
   $('tPassed').textContent = c.Passed;
   $('tChecks').textContent = `of ${c.Checks} checks · ${c.Candidates} judged candidates`;
+
+  // The score counts recorded checks, so the header has to say how much of it is somebody's
+  // word rather than the extract. Without this the number reads as verified when it is not.
+  const banner = $('recordedBanner');
+  if (c.Done > 0) {
+    const one = c.Done === 1;
+    const objs = c.DoneObjects === 1 ? '1 object was' : `${c.DoneObjects} objects were`;
+    const blk = c.DoneBlockers > 0
+      ? `, including ${c.DoneBlockers} blocker${c.DoneBlockers === 1 ? '' : 's'}` : '';
+    banner.hidden = false;
+    banner.innerHTML = `<strong>${c.Done} of the ${c.Passed + c.Done} checks behind this score
+      ${one ? 'is' : 'are'} recorded as done, not verified.</strong>
+      ${objs} still failing in the extract when ${one ? 'it was' : 'they were'} recorded${blk}.
+      Re-extract the data to see whether ${one ? 'it actually passes' : 'they actually pass'}.`;
+  } else {
+    banner.hidden = true;
+  }
 }
 
 function renderDistribution(r) {
@@ -108,16 +125,19 @@ function renderDistribution(r) {
   ).join('');
 
   const blockers = rows.find(x => x.key === 'BLOCKER');
-  $('distNote').textContent = blockers
+  const done = r.Counts.Done;
+  $('distNote').textContent = (blockers
     ? 'Blockers first — the run does not start until those are cleared.'
-    : 'No blockers: the run can start, and the rest is post-processing volume.';
+    : 'No blockers: the run can start, and the rest is post-processing volume.')
+    + (done > 0 ? ` ${done} check(s) recorded as done are not counted here.` : '');
 }
 
 function renderChips(r) {
   const checks = asArray(r.Checks);
   const cats = ['ALL'].concat([...new Set(checks.map(c => c.Category))]);
   $('catChips').innerHTML = cats.map(cat => {
-    const n = (cat === 'ALL' ? checks : checks.filter(c => c.Category === cat)).filter(c => c.Status === 'FAIL').length;
+    const n = (cat === 'ALL' ? checks : checks.filter(c => c.Category === cat))
+      .filter(c => c.Status === 'FAIL' || c.Status === 'DONE').length;
     const label = cat === 'ALL' ? 'All findings' : cat;
     return `<button class="chip" data-cat="${esc(cat)}" aria-pressed="${state.category === cat}">${esc(label)}<span class="n">${n}</span></button>`;
   }).join('');
@@ -131,13 +151,35 @@ function confidenceOf(value) {
   return m ? parseFloat(m[1]) : null;
 }
 
+// What this object should become. Where the extract carries the set of valid values the cell
+// is a dropdown built from it; where it does not - a region, a postal code, a tax number -
+// it is a typed value, because offering a made-up list would be worse than asking.
+function choiceCell(check, e) {
+  const opts = asArray(e.Options);
+  const chosen = e.Choice || '';
+  const attrs = `data-check="${esc(check.Id)}" data-key="${esc(e.Key)}" data-field="${esc(e.Field)}"`;
+  if (!opts.length) {
+    return `<td class="choice-cell"><input class="in choice-input" ${attrs} value="${esc(chosen)}"
+      placeholder="new value" title="No table of valid values for this field is in the extract — type the corrected value."></td>`;
+  }
+  const options = [`<option value=""${chosen ? '' : ' selected'}>— not decided —</option>`].concat(
+    opts.map(o => `<option value="${esc(o.Value)}"${o.Value === chosen ? ' selected' : ''}>${esc(o.Label)}</option>`)
+  ).join('');
+  return `<td class="choice-cell"><select class="in choice-select" ${attrs}>${options}</select></td>`;
+}
+
 function evidenceTable(check) {
   const rows = asArray(check.Evidence);
   if (!rows.length) return '';
   const judgment = check.Layer === 'JUDGMENT';
+  // Only the note check gets a per-row action: a note is the one kind of finding that is
+  // cleared by somebody going away and doing it, rather than by correcting data here.
+  const notes = check.ActionKind === 'note';
   const head = judgment
     ? ['Object', 'Key', 'Verdict', 'Confidence', 'Reasoning', 'Proposed action']
     : ['Object', 'Key', 'Field', 'Value', 'Finding', 'Proposed action'];
+  head.push('Change to');
+  if (notes) head.push('Implemented?');
 
   const body = rows.map(e => {
     let third = `<td>${esc(e.Field)}</td>`;
@@ -149,12 +191,18 @@ function evidenceTable(check) {
         `<td><span class="conf"><span class="conf-bar"><i style="width:${Math.round(conf * 100)}%"></i></span>${conf.toFixed(2)}</span></td>`;
     }
     const table = e.Table && e.Table !== e.Object ? `<br><span class="muted">${esc(e.Table)}</span>` : '';
+    const action = notes
+      ? `<td><button class="btn btn-small note-impl" data-note="${esc(e.Key)}"
+           title="Records that note ${esc(e.Key)} is implemented in the system. It does not implement it.">Mark implemented</button></td>`
+      : '';
     return `<tr>
       <td class="key">${esc(e.Object)}${table}</td>
       <td class="key">${esc(e.Key)}</td>
       ${third}${fourth}
       <td class="detail">${esc(e.Detail)}</td>
       <td class="detail">${esc(e.Proposal)}</td>
+      ${choiceCell(check, e)}
+      ${action}
     </tr>`;
   }).join('');
 
@@ -165,15 +213,47 @@ function evidenceTable(check) {
 function cardHtml(check) {
   const sev = SEV[check.Severity] || SEV.LOW;
   const passed = check.Status === 'PASS';
-  const stripe = passed ? 'var(--good)' : sev.color;
+  // DONE is not PASS and is never drawn as one: the data still says this check fails, and
+  // the card has to keep saying so while showing that somebody has taken it on.
+  const recorded = check.Status === 'DONE';
+  const stripe = passed ? 'var(--good)' : recorded ? 'var(--recorded)' : sev.color;
   const open = state.open[check.Id] ? '1' : '0';
   const layerTag = check.Layer === 'JUDGMENT' ? '<span class="tag">judgment</span>' : '';
-  const statusTag = passed ? '<span class="tag">passed</span>' : '';
+  const statusTag = passed ? '<span class="tag">passed</span>'
+    : recorded ? '<span class="tag tag-recorded">recorded as done</span>' : '';
 
-  return `<article class="card ${passed ? 'pass' : ''}" open-state="${open}" data-id="${esc(check.Id)}">
+  // The note card keeps its reset button after it passes - marking every note implemented is
+  // exactly how it passes, and that is the moment somebody is most likely to want it undone.
+  const isNotes = check.ActionKind === 'note';
+  const noteFootnote = isNotes
+    ? `<p class="muted" style="margin-top:10px">Marking a note implemented records the confirmation
+       in <code>data\\config\\CVI_NOTE_STATUS.csv</code> and drops it from this check. It does not
+       implement anything — the note is implemented in SNOTE, and nothing here reaches an SAP system.</p>`
+    : '';
+  const noteReset = isNotes
+    ? `<button class="btn note-reset" title="Clears every confirmation made from this report. The catalog's own statuses stay as extracted.">Reset confirmations</button>`
+    : '';
+  const reopen = recorded
+    ? `<button class="btn reopen" data-id="${esc(check.Id)}" title="Drops the record that this check was taken on. It goes back to failing, with its objects and its weight on the score.">Reopen check</button>`
+    : '';
+  const recordedNote = recorded
+    ? `<p class="recorded-note">Recorded as done by <strong>${esc(check.RecordedBy)}</strong> on ${esc(check.RecordedAt)}.
+       ${check.Count === 1 ? 'The object below was' : `The ${check.Count} objects below were`} still failing when that was
+       recorded — this is a record that somebody took the check on, not evidence that the system was corrected.
+       Re-extract the data and it fails again if it is still wrong.</p>`
+    : '';
+  const actions = (passed && !isNotes) ? '' : `<div class="card-actions">
+        ${passed || recorded ? '' : `<button class="btn btn-primary pack" data-id="${esc(check.Id)}">Generate fix pack</button>`}
+        ${recorded ? `<button class="btn pack" data-id="${esc(check.Id)}">Regenerate fix pack</button>` : ''}
+        ${reopen}
+        ${noteReset}
+        <span class="pack-result" data-result="${esc(check.Id)}"></span>
+      </div>`;
+
+  return `<article class="card ${passed ? 'pass' : ''} ${recorded ? 'recorded' : ''}" open-state="${open}" data-id="${esc(check.Id)}">
     <div class="card-head">
       <div class="stripe" style="background:${stripe}"></div>
-      <div class="sev"><span class="dot ${passed ? 'dot-good' : sev.cls}"></span>${passed ? 'Passed' : sev.label}</div>
+      <div class="sev"><span class="dot ${passed ? 'dot-good' : recorded ? 'dot-recorded' : sev.cls}"></span>${passed ? 'Passed' : recorded ? 'On record' : sev.label}</div>
       <div class="card-title">
         <div class="row1">
           <span class="card-id">${esc(check.Id)}</span>
@@ -193,18 +273,23 @@ function cardHtml(check) {
         <div><h3>What to do</h3><p>${esc(check.Fix)}</p></div>
       </div>
       <div class="img-path"><strong>Where:</strong> ${esc(check.ImgPath)}</div>
+      ${recordedNote}
       ${evidenceTable(check)}
-      ${passed ? '' : `<div class="card-actions">
-        <button class="btn btn-primary pack" data-id="${esc(check.Id)}">Generate fix pack</button>
-        <span class="pack-result" data-result="${esc(check.Id)}"></span>
-      </div>`}
+      ${noteFootnote}
+      ${actions}
     </div>
   </article>`;
 }
 
 function renderFindings(r) {
   let checks = asArray(r.Checks).filter(c => c.Status !== 'NA');
-  if (!state.showPassed) checks = checks.filter(c => c.Status === 'FAIL');
+  // Recorded checks always stay on screen. They are the ones somebody claimed, so they are
+  // exactly what a reviewer needs to see - and the card carries the only way to undo them.
+  // The note check earns the same treatment once its notes have been ticked off.
+  if (!state.showPassed) {
+    checks = checks.filter(c => c.Status === 'FAIL' || c.Status === 'DONE'
+      || (c.ActionKind === 'note' && r.NoteConfirmations > 0));
+  }
   if (state.category !== 'ALL') checks = checks.filter(c => c.Category === state.category);
 
   $('findings').innerHTML = checks.length
@@ -226,26 +311,148 @@ function renderFindings(r) {
       await generatePack(btn.dataset.id, btn);
     };
   });
+
+  $('findings').querySelectorAll('button.note-impl').forEach(btn => {
+    btn.onclick = async ev => {
+      ev.stopPropagation();
+      await markNoteImplemented(btn.dataset.note, btn);
+    };
+  });
+
+  $('findings').querySelectorAll('button.note-reset').forEach(btn => {
+    btn.onclick = async ev => {
+      ev.stopPropagation();
+      await resetNoteConfirmations(btn);
+    };
+  });
+
+  $('findings').querySelectorAll('button.reopen').forEach(btn => {
+    btn.onclick = async ev => {
+      ev.stopPropagation();
+      await reopenCheck(btn.dataset.id, btn);
+    };
+  });
+
+  // A choice is saved on its own, without re-running the report: picking a value for twenty
+  // rows should not mean twenty full analyses.
+  $('findings').querySelectorAll('.choice-select, .choice-input').forEach(el => {
+    el.onclick = ev => ev.stopPropagation();
+    el.onchange = async () => { await saveChoice(el); };
+  });
 }
 
 // ---------------------------------------------------------------- actions
 
+async function saveChoice(el) {
+  const previous = el.dataset.saved === undefined ? '' : el.dataset.saved;
+  try {
+    const res = await api('/api/decisions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        checkId: el.dataset.check,
+        decisions: [{ checkId: el.dataset.check, key: el.dataset.key, field: el.dataset.field, choice: el.value }]
+      })
+    });
+    if (!res.ok) throw new Error(res.error || 'failed');
+    el.dataset.saved = el.value;
+    el.classList.add('choice-saved');
+    setTimeout(() => el.classList.remove('choice-saved'), 1400);
+  } catch (e) {
+    el.value = previous;
+    toast('Could not save that choice: ' + e.message);
+  }
+}
+
+// Generating a fix pack for a single check also records that somebody has taken it on, so the
+// card moves to 'on record'. Generating every pack at once does not - see the server.
 async function generatePack(checkId, btn) {
   const target = document.querySelector(`[data-result="${checkId}"]`);
+  const label = btn ? btn.textContent : 'Generate fix pack';
   if (btn) { btn.disabled = true; btn.textContent = 'Generating…'; }
   try {
     const res = await api(`/api/fixpack?check=${encodeURIComponent(checkId)}`, { method: 'POST' });
     if (!res.ok) throw new Error(res.error || 'failed');
     const links = asArray(res.files).map(f =>
       `<a href="/api/download?file=${encodeURIComponent(f)}" download>${esc(f)}</a>`).join(' · ');
-    if (target) target.innerHTML = `${res.rows} row(s) written — ${links}`;
-    toast(`${checkId}: ${asArray(res.files).length} file(s) written to .\\out`);
+    toast(res.marked
+      ? `${checkId} recorded as done — ${res.rows} row(s) written to .\\out`
+      : `${checkId}: ${asArray(res.files).length} file(s) written to .\\out`);
+    if (res.marked && res.report) {
+      state.open[checkId] = true;
+      renderAll(res.report);
+      const t2 = document.querySelector(`[data-result="${checkId}"]`);
+      if (t2) t2.innerHTML = `${res.rows} row(s) written — ${links}`;
+    } else if (target) {
+      target.innerHTML = `${res.rows} row(s) written — ${links}`;
+    }
     await refreshFiles();
   } catch (e) {
     if (target) target.textContent = `Failed: ${e.message}`;
     toast(`Could not generate the fix pack for ${checkId}`);
   } finally {
-    if (btn) { btn.disabled = false; btn.textContent = 'Generate fix pack'; }
+    if (btn && document.body.contains(btn)) { btn.disabled = false; btn.textContent = label; }
+  }
+}
+
+async function reopenCheck(checkId, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = 'Reopening…'; }
+  try {
+    const res = await api('/api/check/reopen', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ checkId: checkId })
+    });
+    if (!res.ok) throw new Error(res.error || 'failed');
+    state.open[checkId] = true;
+    renderAll(res.report);
+    toast(`${checkId} is back on the failing list`);
+  } catch (e) {
+    toast(`Could not reopen ${checkId}: ${e.message}`);
+    if (btn) { btn.disabled = false; btn.textContent = 'Reopen check'; }
+  }
+}
+
+// The server saves the confirmation and re-runs the analysis in one call, so the card that
+// held the button is re-rendered from a fresh report rather than patched in place.
+async function markNoteImplemented(note, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = 'Recording…'; }
+  try {
+    const res = await api('/api/notes/status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ notes: [{ note: note, status: 'IMPLEMENTED' }] })
+    });
+    if (!res.ok) throw new Error(res.error || 'failed');
+    state.open['NOTE-01'] = true;
+    // Confirming the last outstanding note makes the check pass, and a passed card is hidden
+    // by default - which would take the reset button away with it.
+    const noteCheck = asArray(res.report.Checks).find(c => c.ActionKind === 'note');
+    if (noteCheck && noteCheck.Status === 'PASS') {
+      state.showPassed = true;
+      $('showPassed').checked = true;
+    }
+    renderAll(res.report);
+    toast(`Note ${note} recorded as implemented — confirm it in SNOTE if you have not already`);
+  } catch (e) {
+    toast(`Could not record note ${note}: ${e.message}`);
+    if (btn) { btn.disabled = false; btn.textContent = 'Mark implemented'; }
+  }
+}
+
+async function resetNoteConfirmations(btn) {
+  if (btn) { btn.disabled = true; btn.textContent = 'Resetting…'; }
+  try {
+    const res = await api('/api/notes/reset', { method: 'POST' });
+    if (!res.ok) throw new Error(res.error || 'failed');
+    state.open['NOTE-01'] = true;
+    state.showPassed = true;
+    $('showPassed').checked = true;
+    renderAll(res.report);
+    toast('Note confirmations cleared — the catalog statuses apply again');
+  } catch (e) {
+    toast('Could not reset the confirmations: ' + e.message);
+    if (btn) { btn.disabled = false; btn.textContent = 'Reset confirmations'; }
   }
 }
 
@@ -283,6 +490,35 @@ $('rerunBtn').onclick = async () => {
     toast('Re-run failed: ' + e.message);
   } finally {
     btn.disabled = false; btn.textContent = 'Re-run analysis';
+  }
+};
+
+// Writing the file into .\out is not exporting it - the person pressing the button wants the
+// workbook, not a note that it exists somewhere on disk. The server already serves it as an
+// attachment, so an anchor click hands it straight to the browser's downloads.
+function downloadFile(name) {
+  const a = document.createElement('a');
+  a.href = `/api/download?file=${encodeURIComponent(name)}`;
+  a.download = name;
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => a.remove(), 0);
+}
+
+$('excelBtn').onclick = async () => {
+  const btn = $('excelBtn');
+  btn.disabled = true; btn.textContent = 'Exporting…';
+  try {
+    const res = await api('/api/excel', { method: 'POST' });
+    if (!res.ok) throw new Error(res.error || 'failed');
+    downloadFile(res.file);
+    toast(`${res.file} downloaded — ${res.rows} record(s) across ${asArray(res.sheets).length} sheet(s), ${res.flagged} carrying a finding`);
+    await refreshFiles();
+  } catch (e) {
+    toast('Excel export failed: ' + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Export to Excel';
   }
 };
 

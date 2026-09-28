@@ -15,7 +15,7 @@ const STATUS = {
   'NEARLY FULL':       'warning',
   'INTERNAL':          'warning',
   'TIGHTEN':           'warning',
-  'WIDEN':             'serious',
+  'EDIT INTERVAL':     'serious',
   'MOVE':              'serious',
   'SET EXTERNAL':      'serious',
   'ADD INTERVAL':      'serious',
@@ -117,7 +117,7 @@ function render(r) {
   const c = plan.Counts;
 
   $('systemLine').textContent =
-    `${r.SystemId}/${r.Client} · ${r.SourceRelease} → ${r.TargetRelease} · ${plan.Strategy.replace('_', ' ').toLowerCase()} strategy · analysed ${r.GeneratedAt}`;
+    `${plan.Strategy.replace('_', ' ').toLowerCase()} strategy · analysed ${r.GeneratedAt}`;
 
   $('tSource').textContent = c.SourceRanges;
   $('tSourceNote').textContent = `${c.SourceIssues} with a finding`;
